@@ -326,7 +326,7 @@
     return new Composite(context);
   };
 
-  composite.version = '0.0.1';
+  composite.version = '0.0.2';
 
   root = this;
 
