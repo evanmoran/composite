@@ -1,0 +1,193 @@
+<!DOCTYPE html><html lang="en"><head><title>composite</title></head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0"><meta name="groc-relative-root" content=""><meta name="groc-document-path" content="composite"><meta name="groc-project-path" content="src/composite.coffee"><link rel="stylesheet" type="text/css" media="all" href="assets/style.css"><script type="text/javascript" src="assets/behavior.js"></script><body><div id="meta"><div class="file-path">src/composite.coffee</div></div><div id="document"><div class="segment"></div><div class="segment"><div class="comments"><div class="wrapper"><h1 id="composite">composite</h1></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="nv">contextProperties = </span><span class="s">&#39;fillStyle strokeStyle shadowColor shadowBlur shadowOffsetX shadowOffsetY lineCap lineJoin lineWidth miterLimit font textAlign textBaseline width height data globalAlpha globalCompositeOperation&#39;</span><span class="p">.</span><span class="nx">split</span> <span class="s">&#39; &#39;</span>
+
+<span class="nv">contextMethods = </span><span class="s">&#39;createLinearGradient createPattern createRadialGradient addColorStop rect fillRect strokeRect clearRect fill stroke beginPath moveTo closePath lineTo clip quadraticCurveTo bezierCurveTo arc arcTo isPointInPath fillText strokeText measureText drawImage createImageData getImageData putImageData createEvent getContext toDataURL&#39;</span><span class="p">.</span><span class="nx">split</span> <span class="s">&#39; &#39;</span>
+
+<span class="nv">inheritedContextProperties = </span><span class="s">&#39;fillStyle strokeStyle lineCap lineJoin lineWidth miterLimit font textAlign textBaseline&#39;</span><span class="p">.</span><span class="nx">split</span> <span class="s">&#39; &#39;</span>
+
+<span class="nv">contextMatrixMethods = </span><span class="s">&#39;save restore scale rotate translate transform setTransform&#39;</span><span class="p">.</span><span class="nx">split</span> <span class="s">&#39; &#39;</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="composite-class">Composite class</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="k">class</span> <span class="nx">Composite</span>
+  <span class="nv">constructor: </span><span class="nf">(contextOrCanvas) -&gt;</span>
+    <span class="k">if</span> <span class="nx">contextOrCanvas</span> <span class="k">instanceof</span> <span class="nx">HTMLCanvasElement</span>
+      <span class="nv">context = </span><span class="nx">contextOrCanvas</span><span class="p">.</span><span class="nx">getContext</span> <span class="s">&#39;2d&#39;</span>
+    <span class="k">else</span>
+      <span class="nv">context = </span><span class="nx">contextOrCanvas</span>
+    <span class="vi">@_contexts = </span><span class="p">[</span><span class="nx">context</span><span class="p">];</span>
+    <span class="vi">@_matrices = </span><span class="k">new</span> <span class="nx">MatrixStack</span><span class="p">()</span>
+    <span class="nx">@_matrices</span><span class="p">.</span><span class="nx">setContextTransform</span> <span class="nx">@context</span>
+
+  <span class="nv">beginGroup: </span><span class="nf">(options = {}) -&gt;</span>
+    <span class="nv">context = </span><span class="nx">_getContext</span> <span class="nx">@context</span><span class="p">.</span><span class="nx">canvas</span><span class="p">.</span><span class="nx">width</span><span class="p">,</span> <span class="nx">@context</span><span class="p">.</span><span class="nx">canvas</span><span class="p">.</span><span class="nx">height</span><span class="p">,</span> <span class="nx">@context</span>
+    <span class="nx">@_matrices</span><span class="p">.</span><span class="nx">setContextTransform</span> <span class="nx">context</span>
+    <span class="nx">@_contexts</span><span class="p">.</span><span class="nx">push</span> <span class="nx">context</span>
+
+  <span class="nv">endGroup: </span><span class="o">-&gt;</span>
+    <span class="k">throw</span> <span class="s">&#39;composite: unbalanced endGroup&#39;</span> <span class="k">if</span> <span class="nx">@_contexts</span><span class="p">.</span><span class="nx">length</span> <span class="o">&lt;=</span> <span class="mi">1</span>
+    <span class="nv">childContext = </span><span class="nx">@context</span>
+    <span class="nx">@_contexts</span><span class="p">.</span><span class="nx">pop</span><span class="p">()</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Draw childContext into @context</p></div></div><div class="code"><div class="wrapper">    <span class="nx">@context</span><span class="p">.</span><span class="nx">save</span><span class="p">()</span>
+    <span class="nx">@context</span><span class="p">.</span><span class="nx">setTransform</span> <span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">1</span><span class="p">,</span><span class="mi">0</span><span class="p">,</span><span class="mi">0</span>               <span class="c1"># reset transform</span>
+    <span class="nx">@context</span><span class="p">.</span><span class="nx">drawImage</span> <span class="nx">childContext</span><span class="p">.</span><span class="nx">canvas</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="nx">@context</span><span class="p">.</span><span class="nx">restore</span><span class="p">()</span>
+    <span class="nx">_releaseContext</span> <span class="nx">childContext</span>
+
+  <span class="nv">group: </span><span class="nf">(options, fn) -&gt;</span>
+    <span class="k">if</span> <span class="o">not</span> <span class="nx">fn</span>
+      <span class="nv">fn = </span><span class="nx">options</span>
+      <span class="nv">options = </span><span class="p">{}</span>
+    <span class="nx">@beginGroup</span><span class="p">(</span><span class="nx">options</span><span class="p">)</span>
+    <span class="nx">fn</span><span class="p">()</span>
+    <span class="nx">@endGroup</span><span class="p">()</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Make <code>@context</code> a property to top of context stack</p></div></div><div class="code"><div class="wrapper"><span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span> <span class="nx">Composite</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="s">&#39;context&#39;</span><span class="p">,</span>
+  <span class="nv">get: </span><span class="o">-&gt;</span> <span class="nx">@_contexts</span><span class="p">[</span><span class="nx">@_contexts</span><span class="p">.</span><span class="nx">length</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Add context methods</p></div></div><div class="code"><div class="wrapper"><span class="k">for</span> <span class="nx">m</span> <span class="k">in</span> <span class="nx">contextMethods</span>
+  <span class="nx">do</span><span class="nf">(m) -&gt;</span>
+    <span class="nx">Composite</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">m</span><span class="p">]</span> <span class="o">=</span> <span class="o">-&gt;</span>
+      <span class="nx">@context</span><span class="p">[</span><span class="nx">m</span><span class="p">].</span><span class="nx">apply</span> <span class="nx">@context</span><span class="p">,</span> <span class="nx">arguments</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Add context properties</p></div></div><div class="code"><div class="wrapper"><span class="k">for</span> <span class="nx">p</span> <span class="k">in</span> <span class="nx">contextProperties</span>
+  <span class="nx">do</span><span class="nf">(p) -&gt;</span>
+    <span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span> <span class="nx">Composite</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="nx">p</span><span class="p">,</span>
+      <span class="nv">get: </span><span class="o">-&gt;</span> <span class="nx">@context</span><span class="p">[</span><span class="nx">p</span><span class="p">]</span>
+      <span class="nv">set: </span><span class="nf">(v) -&gt;</span> <span class="nx">@context</span><span class="p">[</span><span class="nx">p</span><span class="p">]</span> <span class="o">=</span> <span class="nx">v</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Add context matrix methods</p></div></div><div class="code"><div class="wrapper"><span class="k">for</span> <span class="nx">m</span> <span class="k">in</span> <span class="nx">contextMatrixMethods</span>
+  <span class="nx">do</span><span class="nf">(m) -&gt;</span>
+    <span class="nx">Composite</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">m</span><span class="p">]</span> <span class="o">=</span> <span class="o">-&gt;</span>
+      <span class="nx">@_matrices</span><span class="p">[</span><span class="nx">m</span><span class="p">].</span><span class="nx">apply</span> <span class="nx">@_matrices</span><span class="p">,</span> <span class="nx">arguments</span>
+      <span class="nx">@_matrices</span><span class="p">.</span><span class="nx">setContextTransform</span> <span class="nx">@context</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>@context[m].apply @context, arguments</p></div></div><div class="code"><div class="wrapper"><span class="nv">_freeContexts = </span><span class="p">[]</span>
+<span class="nv">_getContext = </span><span class="nf">(width, height, parentContext) -&gt;</span>
+  <span class="k">if</span> <span class="nx">_freeContexts</span><span class="p">.</span><span class="nx">length</span>
+    <span class="nv">context = </span><span class="nx">_freeContexts</span><span class="p">.</span><span class="nx">pop</span><span class="p">()</span>
+    <span class="nv">canvas = </span><span class="nx">context</span><span class="p">.</span><span class="nx">canvas</span>
+    <span class="k">if</span> <span class="nx">canvas</span><span class="p">.</span><span class="nx">width</span> <span class="o">!=</span> <span class="nx">width</span> <span class="o">or</span> <span class="nx">canvas</span><span class="p">.</span><span class="nx">height</span> <span class="o">!=</span> <span class="nx">height</span>
+      <span class="nv">canvas.width = </span><span class="nx">width</span>
+      <span class="nv">canvas.height = </span><span class="nx">height</span>
+    <span class="nx">context</span><span class="p">.</span><span class="nx">beginPath</span><span class="p">()</span>
+    <span class="nx">context</span><span class="p">.</span><span class="nx">clearRect</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">width</span><span class="p">,</span> <span class="nx">height</span>
+  <span class="k">else</span>
+    <span class="nv">canvas = </span><span class="nb">document</span><span class="p">.</span><span class="nx">createElement</span> <span class="s">&#39;canvas&#39;</span>
+    <span class="nv">canvas.width = </span><span class="nx">width</span>
+    <span class="nv">canvas.height = </span><span class="nx">height</span>
+    <span class="nv">context = </span><span class="nx">canvas</span><span class="p">.</span><span class="nx">getContext</span> <span class="s">&#39;2d&#39;</span>
+  <span class="nx">context</span><span class="p">.</span><span class="nx">save</span><span class="p">()</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Copy state from parentContext</p></div></div><div class="code"><div class="wrapper">  <span class="k">if</span> <span class="nx">parentContext</span>
+    <span class="k">for</span> <span class="nx">p</span> <span class="k">in</span> <span class="nx">inheritedContextProperties</span>
+      <span class="nx">context</span><span class="p">[</span><span class="nx">p</span><span class="p">]</span> <span class="o">=</span> <span class="nx">parentContext</span><span class="p">[</span><span class="nx">p</span><span class="p">]</span>
+
+  <span class="nx">context</span>
+
+<span class="nv">_releaseContext = </span><span class="nf">(context) -&gt;</span>
+  <span class="nx">context</span><span class="p">.</span><span class="nx">restore</span><span class="p">()</span>
+  <span class="nx">_freeContexts</span><span class="p">.</span><span class="nx">push</span> <span class="nx">context</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="matrixstack-class">MatrixStack class</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="nv">matrixMethods = </span><span class="s">&#39;multiply scale translate rotate projectPoint setContextTransform scale rotate translate transform setTransform&#39;</span><span class="p">.</span><span class="nx">split</span> <span class="s">&#39; &#39;</span>
+
+<span class="k">class</span> <span class="nx">MatrixStack</span>
+  <span class="nv">constructor: </span><span class="p">(</span><span class="nv">matrix = </span><span class="nx">Matrix</span><span class="p">.</span><span class="nx">Identity</span><span class="p">())</span> <span class="o">-&gt;</span>
+    <span class="vi">@_stack = </span><span class="p">[</span><span class="nx">matrix</span><span class="p">]</span>
+
+  <span class="nv">clone: </span><span class="o">-&gt;</span>
+    <span class="nv">stack = </span><span class="p">[]</span>
+    <span class="k">for</span> <span class="nx">m</span> <span class="k">in</span> <span class="nx">@_stack</span>
+      <span class="nx">stack</span><span class="p">.</span><span class="nx">push</span> <span class="nx">m</span><span class="p">.</span><span class="nx">clone</span><span class="p">()</span>
+    <span class="nv">s = </span><span class="k">new</span> <span class="nx">MatrixStack</span>
+    <span class="nv">s._stack = </span><span class="nx">stack</span>
+
+  <span class="nv">save: </span><span class="o">-&gt;</span>
+    <span class="nx">@_stack</span><span class="p">.</span><span class="nx">push</span> <span class="nx">@matrix</span><span class="p">.</span><span class="nx">clone</span><span class="p">()</span>
+
+  <span class="nv">restore: </span><span class="o">-&gt;</span>
+    <span class="nx">@_stack</span><span class="p">.</span><span class="nx">pop</span><span class="p">()</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Add '@matrix' property to refer to top matrix</p></div></div><div class="code"><div class="wrapper"><span class="nb">Object</span><span class="p">.</span><span class="nx">defineProperty</span> <span class="nx">MatrixStack</span><span class="p">.</span><span class="nx">prototype</span><span class="p">,</span> <span class="s">&#39;matrix&#39;</span><span class="p">,</span> <span class="nv">get: </span><span class="o">-&gt;</span> <span class="nx">@_stack</span><span class="p">[</span><span class="nx">@_stack</span><span class="p">.</span><span class="nx">length</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><p>Pass through methods of Matrix</p></div></div><div class="code"><div class="wrapper"><span class="k">for</span> <span class="nx">m</span> <span class="k">in</span> <span class="nx">matrixMethods</span>
+  <span class="nx">do</span> <span class="nf">(m) -&gt;</span>
+    <span class="nx">MatrixStack</span><span class="p">.</span><span class="nx">prototype</span><span class="p">[</span><span class="nx">m</span><span class="p">]</span> <span class="o">=</span> <span class="o">-&gt;</span>
+      <span class="k">throw</span> <span class="nb">Error</span><span class="p">(</span><span class="s">&#39;FUUU&#39;</span><span class="p">)</span> <span class="nx">unless</span> <span class="nx">@</span> <span class="k">instanceof</span> <span class="nx">MatrixStack</span>
+      <span class="nx">@matrix</span><span class="p">[</span><span class="nx">m</span><span class="p">].</span><span class="nx">apply</span> <span class="nx">@matrix</span><span class="p">,</span> <span class="nx">arguments</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="matrix-class">Matrix class</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="k">class</span> <span class="nx">Matrix</span>
+  <span class="nv">constructor: </span><span class="p">(</span><span class="nv">values = </span><span class="nx">_identityMatrix</span><span class="p">())</span> <span class="o">-&gt;</span>
+    <span class="vi">@_values = </span><span class="nx">values</span><span class="p">.</span><span class="nx">slice</span> <span class="mi">0</span>
+
+  <span class="nv">clone: </span><span class="o">-&gt;</span>
+    <span class="k">new</span> <span class="nx">Matrix</span> <span class="nx">@_values</span>
+
+  <span class="nv">multiply: </span><span class="nf">(other) -&gt;</span>
+    <span class="vi">@_values = </span><span class="p">(</span><span class="nx">_matrixMultiply</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">other_</span><span class="p">.</span><span class="nx">values</span><span class="p">)</span>
+
+  <span class="nv">scale: </span><span class="nf">(sx, sy) -&gt;</span>
+    <span class="vi">@_values = </span><span class="p">(</span><span class="nx">_matrixScale</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">sx</span><span class="p">,</span> <span class="nx">sy</span><span class="p">)</span>
+
+  <span class="nv">translate: </span><span class="nf">(x, y) -&gt;</span>
+    <span class="vi">@_values = </span><span class="p">(</span><span class="nx">_matrixTranslate</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">)</span>
+
+  <span class="nv">rotate: </span><span class="nf">(angle) -&gt;</span>
+    <span class="vi">@_values = </span><span class="p">(</span><span class="nx">_matrixRotate</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">angle</span><span class="p">)</span>
+
+  <span class="nv">projectPoint: </span><span class="nf">(x, y) -&gt;</span>
+    <span class="nx">_matrixProjectPoint</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">x</span><span class="p">,</span> <span class="nx">y</span>
+
+  <span class="nv">setTransform: </span><span class="nf">() -&gt;</span>
+    <span class="vi">@_values = </span><span class="nb">Array</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">slice</span><span class="p">.</span><span class="nx">call</span> <span class="nx">arguments</span><span class="p">,</span> <span class="mi">0</span>
+
+  <span class="nv">transform: </span><span class="nf">() -&gt;</span>
+    <span class="nv">values = </span><span class="nb">Array</span><span class="p">.</span><span class="nx">prototype</span><span class="p">.</span><span class="nx">slice</span><span class="p">.</span><span class="nx">call</span> <span class="nx">arguments</span><span class="p">,</span> <span class="mi">0</span>
+    <span class="vi">@_values = </span><span class="nx">_matrixMultiply</span> <span class="nx">@_values</span><span class="p">,</span> <span class="nx">values</span>
+
+  <span class="nv">setContextTransform: </span><span class="nf">(context) -&gt;</span>
+    <span class="nx">context</span><span class="p">.</span><span class="nx">setTransform</span><span class="p">.</span><span class="nx">apply</span> <span class="nx">context</span><span class="p">,</span> <span class="nx">@_values</span>
+
+<span class="nv">Matrix.Identity = </span><span class="o">-&gt;</span> <span class="k">new</span> <span class="nx">Matrix</span> <span class="nx">_identityMatrix</span><span class="p">()</span>
+<span class="nv">Matrix.Rotation = </span><span class="nf">(angle) -&gt;</span> <span class="k">new</span> <span class="nx">Matrix</span> <span class="nx">_rotationMatrix</span><span class="p">(</span><span class="nx">angle</span><span class="p">)</span>
+<span class="nv">Matrix.Translation = </span><span class="nf">(x, y) -&gt;</span> <span class="k">new</span> <span class="nx">Matrix</span> <span class="nx">_translationMatrix</span><span class="p">(</span><span class="nx">x</span><span class="p">,</span> <span class="nx">y</span><span class="p">)</span>
+<span class="nv">Matrix.Scale = </span><span class="nf">(sx, sy) -&gt;</span> <span class="k">new</span> <span class="nx">Matrix</span> <span class="nx">_scalingMatrix</span><span class="p">(</span><span class="nx">sx</span><span class="p">,</span> <span class="nx">sy</span><span class="p">)</span>
+
+<span class="nv">_matrixMultiply = </span><span class="nf">(m1, m2) -&gt;</span>
+  <span class="nv">m11 = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+  <span class="nv">m12 = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+
+  <span class="nv">m21 = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+  <span class="nv">m22 = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+
+  <span class="nv">dx = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+  <span class="nv">dy = </span><span class="nx">m1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">m2</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+
+  <span class="p">[</span><span class="nx">m11</span><span class="p">,</span> <span class="nx">m12</span><span class="p">,</span> <span class="nx">m21</span><span class="p">,</span> <span class="nx">m22</span><span class="p">,</span> <span class="nx">dx</span><span class="p">,</span> <span class="nx">dy</span><span class="p">]</span>
+
+<span class="nv">_matrixRotate = </span><span class="nf">(m, angle) -&gt;</span>
+  <span class="nv">c = </span><span class="nb">Math</span><span class="p">.</span><span class="nx">cos</span><span class="p">(</span><span class="nx">angle</span><span class="p">)</span>
+  <span class="nv">s = </span><span class="nb">Math</span><span class="p">.</span><span class="nx">sin</span><span class="p">(</span><span class="nx">angle</span><span class="p">)</span>
+  <span class="nv">m11 = </span><span class="nx">m</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nx">c</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">s</span>
+  <span class="nv">m12 = </span><span class="nx">m</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="nx">c</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">s</span>
+  <span class="nv">m21 = </span><span class="nx">m</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*-</span><span class="nx">s</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">c</span>
+  <span class="nv">m22 = </span><span class="nx">m</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*-</span><span class="nx">s</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">c</span>
+  <span class="nv">dx = </span><span class="nx">m</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+  <span class="nv">dy = </span><span class="nx">m</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+  <span class="p">[</span><span class="nx">m11</span><span class="p">,</span> <span class="nx">m12</span><span class="p">,</span> <span class="nx">m21</span><span class="p">,</span> <span class="nx">m22</span><span class="p">,</span> <span class="nx">dx</span><span class="p">,</span> <span class="nx">dy</span><span class="p">]</span>
+
+<span class="nv">_matrixTranslate = </span><span class="nf">(m1, x, y) -&gt;</span>
+  <span class="nv">m = </span><span class="nx">m1</span><span class="p">.</span><span class="nx">slice</span> <span class="mi">0</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span> <span class="o">+=</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">*</span><span class="nx">x</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span><span class="o">*</span><span class="nx">y</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span> <span class="o">+=</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">*</span><span class="nx">x</span> <span class="o">+</span> <span class="nx">m1</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span><span class="o">*</span><span class="nx">y</span>
+  <span class="nx">m</span>
+
+<span class="nv">_matrixScale = </span><span class="nf">(m1, sx, sy) -&gt;</span>
+  <span class="nv">m = </span><span class="nx">m1</span><span class="p">.</span><span class="nx">slice</span> <span class="mi">0</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*=</span> <span class="nx">sx</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*=</span> <span class="nx">sx</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">*=</span> <span class="nx">sy</span>
+  <span class="nx">m</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">*=</span> <span class="nx">sy</span>
+  <span class="nx">m</span>
+
+<span class="nv">_identityMatrix = </span><span class="o">-&gt;</span>
+  <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">0</span> <span class="p">,</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span>
+
+<span class="nv">_rotationMatrix = </span><span class="nf">(angle) -&gt;</span>
+  <span class="nv">c = </span><span class="nb">Math</span><span class="p">.</span><span class="nx">cos</span><span class="p">(</span><span class="nx">angle</span><span class="p">)</span>
+  <span class="nv">s = </span><span class="nb">Math</span><span class="p">.</span><span class="nx">sin</span><span class="p">(</span><span class="nx">angle</span><span class="p">)</span>
+  <span class="p">[</span> <span class="nx">c</span><span class="p">,</span> <span class="nx">s</span><span class="p">,</span> <span class="o">-</span><span class="nx">s</span><span class="p">,</span> <span class="nx">c</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> <span class="p">]</span>
+
+<span class="nv">_translationMatrix = </span><span class="nf">(x, y) -&gt;</span>
+  <span class="p">[</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="nx">x</span><span class="p">,</span> <span class="nx">y</span> <span class="p">]</span>
+
+<span class="nv">_scalingMatrix = </span><span class="nf">(sx, sy) -&gt;</span>
+  <span class="p">[</span> <span class="nx">sx</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nx">sy</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span> <span class="p">]</span>
+
+<span class="nv">_matrixProjectPoint = </span><span class="nf">(m, x, y) -&gt;</span>
+  <span class="p">[</span>
+    <span class="nx">x</span><span class="o">*</span><span class="nx">m</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">+</span> <span class="nx">y</span><span class="o">*</span><span class="nx">m</span><span class="p">[</span><span class="mi">2</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">4</span><span class="p">],</span>
+    <span class="nx">x</span><span class="o">*</span><span class="nx">m</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">+</span> <span class="nx">y</span><span class="o">*</span><span class="nx">m</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span> <span class="o">+</span> <span class="nx">m</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+  <span class="p">]</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="composite-function">composite function</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="nv">composite = </span><span class="nf">(context) -&gt;</span>
+  <span class="k">new</span> <span class="nx">Composite</span> <span class="nx">context</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="version">Version</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="nv">composite.version = </span><span class="s">&#39;0.0.1&#39;</span></div></div></div><div class="segment"><div class="comments"><div class="wrapper"><h2 id="export">Export</h2></div></div></div><div class="segment"><div class="code"><div class="wrapper"><span class="nv">root = </span><span class="nx">@</span>
+
+<span class="k">if</span> <span class="k">typeof</span> <span class="nx">module</span> <span class="o">!=</span> <span class="s">&#39;undefined&#39;</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span> <span class="s">&quot;here: </span><span class="si">#{</span><span class="nx">__filename</span><span class="si">}</span><span class="s">: 248&quot;</span>
+  <span class="nv">exports = module.exports = </span><span class="nx">composite</span>
+<span class="k">else</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span> <span class="s">&quot;here: </span><span class="si">#{</span><span class="nx">__filename</span><span class="si">}</span><span class="s">: 254&quot;</span>
+  <span class="nx">root</span><span class="p">[</span><span class="s">&#39;composite&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="nx">composite</span></div></div></div></div></body></html>
