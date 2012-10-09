@@ -12,8 +12,6 @@
     "html5"
   ],
   "author": "Evan Moran <evan@evanmoran.com>",
-  "dependencies": {
-  },
   "scripts": {
     "test": "cake test"
   },
