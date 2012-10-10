@@ -75,4 +75,4 @@ output:
 
 ![Shadow With Layer](https://raw.github.com/evanmoran/composite/master/docs/images/shadow_with_layer.png)
 
-Thats it. Hope it helps!
+That's it. Hope it helps!
