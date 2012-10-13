@@ -2,7 +2,7 @@
 (function() {
   var Composite, Matrix, MatrixStack, composite, contextMatrixMethods, contextMethods, contextProperties, exports, inheritedContextProperties, m, matrixMethods, p, root, _fn, _fn1, _fn2, _fn3, _freeContexts, _getContext, _i, _identityMatrix, _j, _k, _l, _len, _len1, _len2, _len3, _matrixMultiply, _matrixProjectPoint, _matrixRotate, _matrixScale, _matrixTranslate, _releaseContext, _rotationMatrix, _scalingMatrix, _translationMatrix;
 
-  contextProperties = 'fillStyle strokeStyle shadowColor shadowBlur shadowOffsetX shadowOffsetY lineCap lineJoin lineWidth miterLimit font textAlign textBaseline width height data globalAlpha globalCompositeOperation'.split(' ');
+  contextProperties = 'canvas fillStyle strokeStyle shadowColor shadowBlur shadowOffsetX shadowOffsetY lineCap lineJoin lineWidth miterLimit font textAlign textBaseline width height data globalAlpha globalCompositeOperation'.split(' ');
 
   contextMethods = 'createLinearGradient createPattern createRadialGradient addColorStop rect fillRect strokeRect clearRect fill stroke beginPath moveTo closePath lineTo clip quadraticCurveTo bezierCurveTo arc arcTo isPointInPath fillText strokeText measureText drawImage createImageData getImageData putImageData createEvent getContext toDataURL'.split(' ');
 
@@ -22,30 +22,49 @@
       this._contexts = [context];
       this._matrices = new MatrixStack();
       this._matrices.setContextTransform(this.context);
+      this._globals = [];
     }
 
     Composite.prototype.beginLayer = function(options) {
-      var context;
+      var alpha, compositeOperation, context, parentContext;
       if (options == null) {
         options = {};
       }
-      context = _getContext(this.context.canvas.width, this.context.canvas.height, this.context);
-      this._matrices.setContextTransform(context);
+      parentContext = this.context;
+      compositeOperation = options.compositeOperation != null ? options.compositeOperation : parentContext.globalCompositeOperation;
+      alpha = options.alpha != null ? options.alpha : parentContext.globalAlpha;
+      if ((compositeOperation !== 'source-over') || (alpha !== 1)) {
+        this.saveGlobals();
+        if (alpha !== null) {
+          parentContext.globalAlpha = alpha;
+        }
+        if (compositeOperation !== null) {
+          parentContext.globalCompositeOperation = compositeOperation;
+        }
+        context = _getContext(parentContext.canvas.width, parentContext.canvas.height, parentContext);
+        this._matrices.setContextTransform(context);
+      } else {
+        context = parentContext;
+      }
       return this._contexts.push(context);
     };
 
     Composite.prototype.endLayer = function() {
-      var childContext;
+      var childContext, parentContext;
       if (this._contexts.length <= 1) {
         throw 'composite: unbalanced endLayer';
       }
       childContext = this.context;
       this._contexts.pop();
-      this.context.save();
-      this.context.setTransform(1, 0, 0, 1, 0, 0);
-      this.context.drawImage(childContext.canvas, 0, 0);
-      this.context.restore();
-      return _releaseContext(childContext);
+      parentContext = this.context;
+      if (parentContext !== childContext) {
+        parentContext.save();
+        parentContext.setTransform(1, 0, 0, 1, 0, 0);
+        parentContext.drawImage(childContext.canvas, 0, 0);
+        parentContext.restore();
+        _releaseContext(childContext);
+        return this.restoreGlobals();
+      }
     };
 
     Composite.prototype.layer = function(options, fn) {
@@ -58,6 +77,23 @@
       return this.endLayer();
     };
 
+    Composite.prototype.saveGlobals = function() {
+      return this._globals.push({
+        alpha: this.context.globalAlpha,
+        compositeOperation: this.context.globalCompositeOperation
+      });
+    };
+
+    Composite.prototype.restoreGlobals = function() {
+      var globalRecord;
+      if (!this._globals.length) {
+        throw new Error('composite: restoreGlobals called without saveGlobals');
+      }
+      globalRecord = this._globals.pop();
+      this.context.globalAlpha = globalRecord.alpha;
+      return this.context.globalCompositeOperation = globalRecord.compositeOperation;
+    };
+
     return Composite;
 
   })();
@@ -65,6 +101,22 @@
   Object.defineProperty(Composite.prototype, 'context', {
     get: function() {
       return this._contexts[this._contexts.length - 1];
+    }
+  });
+
+  Object.defineProperty(Composite.prototype, 'matrix', {
+    get: function() {
+      return this._matrices.top.clone();
+    },
+    set: function(m) {
+      this._matrices.top.set(m);
+      return m.setContextTransform(this.context);
+    }
+  });
+
+  Object.defineProperty(Composite.prototype, 'getTransform', {
+    get: function() {
+      return this.matrix._values.slice(0);
     }
   });
 
@@ -124,6 +176,8 @@
       context = canvas.getContext('2d');
     }
     context.save();
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = 'source-over';
     if (parentContext) {
       for (_l = 0, _len3 = inheritedContextProperties.length; _l < _len3; _l++) {
         p = inheritedContextProperties[_l];
@@ -162,7 +216,7 @@
     };
 
     MatrixStack.prototype.save = function() {
-      return this._stack.push(this.matrix.clone());
+      return this._stack.push(this.top.clone());
     };
 
     MatrixStack.prototype.restore = function() {
@@ -173,7 +227,7 @@
 
   })();
 
-  Object.defineProperty(MatrixStack.prototype, 'matrix', {
+  Object.defineProperty(MatrixStack.prototype, 'top', {
     get: function() {
       return this._stack[this._stack.length - 1];
     }
@@ -181,10 +235,7 @@
 
   _fn3 = function(m) {
     return MatrixStack.prototype[m] = function() {
-      if (!(this instanceof MatrixStack)) {
-        throw Error('FUUU');
-      }
-      return this.matrix[m].apply(this.matrix, arguments);
+      return this.top[m].apply(this.top, arguments);
     };
   };
   for (_l = 0, _len3 = matrixMethods.length; _l < _len3; _l++) {
@@ -203,6 +254,10 @@
 
     Matrix.prototype.clone = function() {
       return new Matrix(this._values);
+    };
+
+    Matrix.prototype.set = function(other) {
+      return this._values = other._values.slice(0);
     };
 
     Matrix.prototype.multiply = function(other) {
@@ -326,7 +381,7 @@
     return new Composite(context);
   };
 
-  composite.version = '0.0.2';
+  composite.version = '0.0.3';
 
   root = this;
 

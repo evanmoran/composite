@@ -1,6 +1,6 @@
 {
   "name": "composite",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "main": "src/composite.js",
   "description": "A compositor for canvas",

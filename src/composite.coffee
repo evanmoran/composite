@@ -2,7 +2,7 @@
 # composite
 # ====================================================================
 
-contextProperties = 'fillStyle strokeStyle shadowColor shadowBlur shadowOffsetX shadowOffsetY lineCap lineJoin lineWidth miterLimit font textAlign textBaseline width height data globalAlpha globalCompositeOperation'.split ' '
+contextProperties = 'canvas fillStyle strokeStyle shadowColor shadowBlur shadowOffsetX shadowOffsetY lineCap lineJoin lineWidth miterLimit font textAlign textBaseline width height data globalAlpha globalCompositeOperation'.split ' '
 
 contextMethods = 'createLinearGradient createPattern createRadialGradient addColorStop rect fillRect strokeRect clearRect fill stroke beginPath moveTo closePath lineTo clip quadraticCurveTo bezierCurveTo arc arcTo isPointInPath fillText strokeText measureText drawImage createImageData getImageData putImageData createEvent getContext toDataURL'.split ' '
 
@@ -21,22 +21,38 @@ class Composite
     @_contexts = [context];
     @_matrices = new MatrixStack()
     @_matrices.setContextTransform @context
+    @_globals = []
 
   beginLayer: (options = {}) ->
-    context = _getContext @context.canvas.width, @context.canvas.height, @context
-    @_matrices.setContextTransform context
+    parentContext = @context
+    compositeOperation = if options.compositeOperation? then options.compositeOperation else parentContext.globalCompositeOperation
+    alpha = if options.alpha? then options.alpha else parentContext.globalAlpha
+
+    if (compositeOperation != 'source-over') or (alpha != 1)
+      @saveGlobals()
+      if alpha != null
+        parentContext.globalAlpha = alpha
+      if compositeOperation != null
+        parentContext.globalCompositeOperation = compositeOperation
+      context = _getContext parentContext.canvas.width, parentContext.canvas.height, parentContext
+      @_matrices.setContextTransform context
+    else
+      context = parentContext
     @_contexts.push context
 
   endLayer: ->
     throw 'composite: unbalanced endLayer' if @_contexts.length <= 1
     childContext = @context
     @_contexts.pop()
+    parentContext = @context
     # Draw childContext into @context
-    @context.save()
-    @context.setTransform 1,0,0,1,0,0               # reset transform
-    @context.drawImage childContext.canvas, 0, 0
-    @context.restore()
-    _releaseContext childContext
+    if parentContext != childContext
+      parentContext.save()
+      parentContext.setTransform 1,0,0,1,0,0               # reset transform
+      parentContext.drawImage childContext.canvas, 0, 0
+      parentContext.restore()
+      _releaseContext childContext
+      @restoreGlobals()
 
   layer: (options, fn) ->
     if not fn
@@ -46,9 +62,26 @@ class Composite
     fn()
     @endLayer()
 
-# Make `@context` a property to top of context stack
+  saveGlobals: ->
+    @_globals.push alpha: @context.globalAlpha, compositeOperation: @context.globalCompositeOperation
+
+  restoreGlobals: ->
+    throw (new Error 'composite: restoreGlobals called without saveGlobals') unless @_globals.length
+    globalRecord = @_globals.pop()
+    @context.globalAlpha = globalRecord.alpha
+    @context.globalCompositeOperation = globalRecord.compositeOperation
+
 Object.defineProperty Composite.prototype, 'context',
   get: -> @_contexts[@_contexts.length-1]
+
+Object.defineProperty Composite.prototype, 'matrix',
+  get: -> @_matrices.top.clone()
+  set: (m) ->
+    @_matrices.top.set m
+    m.setContextTransform @context
+
+Object.defineProperty Composite.prototype, 'getTransform',
+  get: -> @matrix._values.slice 0
 
 # Add context methods
 for m in contextMethods
@@ -88,6 +121,10 @@ _getContext = (width, height, parentContext) ->
     context = canvas.getContext '2d'
   context.save()
 
+  # Start with full opacity and normal composition
+  context.globalAlpha = 1
+  context.globalCompositeOperation = 'source-over'
+
   # Copy state from parentContext
   if parentContext
     for p in inheritedContextProperties
@@ -116,21 +153,18 @@ class MatrixStack
     s._stack = stack
 
   save: ->
-    @_stack.push @matrix.clone()
+    @_stack.push @top.clone()
 
   restore: ->
     @_stack.pop()
 
-# Add '@matrix' property to refer to top matrix
-Object.defineProperty MatrixStack.prototype, 'matrix', get: -> @_stack[@_stack.length-1]
+Object.defineProperty MatrixStack.prototype, 'top', get: -> @_stack[@_stack.length-1]
 
 # Pass through methods of Matrix
 for m in matrixMethods
   do (m) ->
     MatrixStack.prototype[m] = ->
-      throw Error('FUUU') unless @ instanceof MatrixStack
-      @matrix[m].apply @matrix, arguments
-
+      @top[m].apply @top, arguments
 
 # Matrix class
 # ---------------------------------------------------------------------
@@ -140,6 +174,9 @@ class Matrix
 
   clone: ->
     new Matrix @_values
+
+  set: (other) ->
+    @_values = other._values.slice 0
 
   multiply: (other) ->
     @_values = (_matrixMultiply @_values, other_.values)
@@ -236,7 +273,7 @@ composite = (context) ->
 
 # Version
 # ---------------------------------------------------------------------
-composite.version = '0.0.2'
+composite.version = '0.0.3'
 
 # Export
 # ---------------------------------------------------------------------
