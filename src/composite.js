@@ -26,15 +26,17 @@
     }
 
     Composite.prototype.beginLayer = function(options) {
-      var alpha, compositeOperation, context, parentContext;
+      var alpha, compositeOperation, context, force, parentContext;
       if (options == null) {
         options = {};
       }
       parentContext = this.context;
       compositeOperation = options.compositeOperation != null ? options.compositeOperation : parentContext.globalCompositeOperation;
       alpha = options.alpha != null ? options.alpha : parentContext.globalAlpha;
-      if ((compositeOperation !== 'source-over') || (alpha !== 1)) {
-        this.saveGlobals();
+      force = options.force;
+      this.saveGlobals();
+      this._matrices.save();
+      if ((compositeOperation !== 'source-over') || (alpha !== 1) || force) {
         if (alpha !== null) {
           parentContext.globalAlpha = alpha;
         }
@@ -58,13 +60,21 @@
       this._contexts.pop();
       parentContext = this.context;
       if (parentContext !== childContext) {
-        parentContext.save();
-        parentContext.setTransform(1, 0, 0, 1, 0, 0);
-        parentContext.drawImage(childContext.canvas, 0, 0);
-        parentContext.restore();
+        this._drawContext(childContext, parentContext);
         _releaseContext(childContext);
-        return this.restoreGlobals();
       }
+      this.restoreGlobals();
+      return this._matrices.restore();
+    };
+
+    Composite.prototype._drawContext = function(childContext, parentContext) {
+      if (parentContext == null) {
+        parentContext = this.context;
+      }
+      parentContext.save();
+      parentContext.setTransform(1, 0, 0, 1, 0, 0);
+      parentContext.drawImage(childContext.canvas, 0, 0);
+      return parentContext.restore();
     };
 
     Composite.prototype.layer = function(options, fn) {

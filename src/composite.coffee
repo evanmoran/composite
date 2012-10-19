@@ -27,9 +27,11 @@ class Composite
     parentContext = @context
     compositeOperation = if options.compositeOperation? then options.compositeOperation else parentContext.globalCompositeOperation
     alpha = if options.alpha? then options.alpha else parentContext.globalAlpha
+    force = options.force
 
-    if (compositeOperation != 'source-over') or (alpha != 1)
-      @saveGlobals()
+    @saveGlobals()
+    @_matrices.save()
+    if (compositeOperation != 'source-over') or (alpha != 1) or (force)
       if alpha != null
         parentContext.globalAlpha = alpha
       if compositeOperation != null
@@ -47,12 +49,16 @@ class Composite
     parentContext = @context
     # Draw childContext into @context
     if parentContext != childContext
-      parentContext.save()
-      parentContext.setTransform 1,0,0,1,0,0               # reset transform
-      parentContext.drawImage childContext.canvas, 0, 0
-      parentContext.restore()
+      @_drawContext(childContext, parentContext)
       _releaseContext childContext
-      @restoreGlobals()
+    @restoreGlobals()
+    @_matrices.restore()
+
+  _drawContext: (childContext, parentContext = @context) ->
+    parentContext.save()
+    parentContext.setTransform 1,0,0,1,0,0               # reset transform
+    parentContext.drawImage childContext.canvas, 0, 0
+    parentContext.restore()
 
   layer: (options, fn) ->
     if not fn
