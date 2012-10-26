@@ -227,6 +227,9 @@ class Matrix
     values = Array.prototype.slice.call arguments, 0
     @_values = _matrixMultiply @_values, values
 
+  inverse: () ->
+    new Matrix (_matrixInvert @_values)
+
   setContextTransform: (context) ->
     context.setTransform.apply context, @_values
 
@@ -292,6 +295,13 @@ _matrixProjectPoint = (m, x, y) ->
     x*m[1] + y*m[3] + m[5]
   ]
 
+_matrixInvert = (m) ->
+    d = 1 / (m[0]*m[3] - m[1]*m[2])
+    [
+      m[3]*d, -m[1]*d,
+      -m[2]*d, m[0]*d,
+      d*(m[2]*m[5] - m[3]*m[4]), d*(m[1]*m[4] - m[0]*m[5])
+    ]
 
 # composite function
 # ---------------------------------------------------------------------
