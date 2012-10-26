@@ -54,11 +54,32 @@ class Composite
     @restoreGlobals()
     @_matrices.restore()
 
-  _drawContext: (childContext, parentContext = @context) ->
+  _drawContext: (childContext, parentContext = @context, x = 0, y = 0) ->
     parentContext.save()
     parentContext.setTransform 1,0,0,1,0,0               # reset transform
-    parentContext.drawImage childContext.canvas, 0, 0
+    parentContext.drawImage childContext.canvas, x, y
     parentContext.restore()
+
+  createCacheableLayer: ->
+    parentContext = @context
+    childContext = _getContext parentContext.canvas.width, parentContext.canvas.height, parentContext
+    composite childContext
+
+  drawCacheableLayer: (ctx, x = 0, y = 0) ->
+    if !(ctx instanceof Composite) or ctx._contexts.length == 1
+      @_drawContext ctx.context, @context, x, y
+    if ctx._contexts.length < 1
+      throw new Error "composite: can't draw released cacheable layer."
+    else if ctx._contexts.length > 1
+      throw new Error "composite: drawing incomplete cacheable layer."
+
+  releaseCacheableLayer: (ctx) ->
+    if ctx instanceof Composite
+      for c in ctx._contexts
+        _releaseContext c
+      ctx._contexts = []
+    else
+      throw new Error "composite: not a cacheable layer: #{ctx}."
 
   layer: (options, fn) ->
     if not fn

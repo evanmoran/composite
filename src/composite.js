@@ -67,14 +67,58 @@
       return this._matrices.restore();
     };
 
-    Composite.prototype._drawContext = function(childContext, parentContext) {
+    Composite.prototype._drawContext = function(childContext, parentContext, x, y) {
       if (parentContext == null) {
         parentContext = this.context;
       }
+      if (x == null) {
+        x = 0;
+      }
+      if (y == null) {
+        y = 0;
+      }
       parentContext.save();
       parentContext.setTransform(1, 0, 0, 1, 0, 0);
-      parentContext.drawImage(childContext.canvas, 0, 0);
+      parentContext.drawImage(childContext.canvas, x, y);
       return parentContext.restore();
+    };
+
+    Composite.prototype.createCacheableLayer = function() {
+      var childContext, parentContext;
+      parentContext = this.context;
+      childContext = _getContext(parentContext.canvas.width, parentContext.canvas.height, parentContext);
+      return composite(childContext);
+    };
+
+    Composite.prototype.drawCacheableLayer = function(ctx, x, y) {
+      if (x == null) {
+        x = 0;
+      }
+      if (y == null) {
+        y = 0;
+      }
+      if (!(ctx instanceof Composite) || ctx._contexts.length === 1) {
+        this._drawContext(ctx.context, this.context, x, y);
+      }
+      if (ctx._contexts.length < 1) {
+        throw new Error("composite: can't draw released cacheable layer.");
+      } else if (ctx._contexts.length > 1) {
+        throw new Error("composite: drawing incomplete cacheable layer.");
+      }
+    };
+
+    Composite.prototype.releaseCacheableLayer = function(ctx) {
+      var c, _i, _len, _ref;
+      if (ctx instanceof Composite) {
+        _ref = ctx._contexts;
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          c = _ref[_i];
+          _releaseContext(c);
+        }
+        return ctx._contexts = [];
+      } else {
+        throw new Error("composite: not a cacheable layer: " + ctx + ".");
+      }
     };
 
     Composite.prototype.layer = function(options, fn) {
