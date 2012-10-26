@@ -445,7 +445,7 @@
     return new Composite(context);
   };
 
-  composite.version = '0.0.3';
+  composite.version = '0.0.4';
 
   root = this;
 
