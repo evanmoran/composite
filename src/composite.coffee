@@ -308,6 +308,18 @@ _matrixInvert = (m) ->
 composite = (context) ->
   new Composite context
 
+# Expose Matrix class
+# ---------------------------------------------------------------------
+composite.affineTransform = ->
+  if (arguments.length == 0)
+    return Matrix.Identity()
+  if (arguments.length == 1) and (arguments[0].length == 6)
+    return new Matrix arguments[0]
+  if (arguments.length == 6)
+    return new Matrix (Array.prototype.slice arguments, 0)
+  console.log "composite: affineTransform called with ", arguments
+  throw new Error "Invalid arguments. Expected (scaleX, skewX, skewY, scaleY, transX, transY)."
+
 # Version
 # ---------------------------------------------------------------------
 composite.version = '0.0.4'
